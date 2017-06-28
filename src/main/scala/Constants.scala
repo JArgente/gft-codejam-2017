@@ -22,12 +22,29 @@ object Constants {
   val PROB_JUMP_GENOMES = 0.05
   val PROB_CROSS_TERMINAL = 0.1
 
-  val listaAcciones :Vector[String]=Vector("turnGunLeft", "turnGunRight", "fire", "fireBullet", "ahead", "back", "turnLeft","turnRight" )/*,
+  val listaAcciones :Vector[(String,(Double, Double))]=Vector(
+    ("turnGunLeft",(0.0, 360.0)),
+    ("turnGunRight",(0.0, 360.0)),
+    ("fire",(1.0, 3.0)),
+    ("ahead",(0.0, 600.0)),
+    ("back",(0.0, 600.0)),
+    ("turnLeft",(0.0, 360.0)),
+    ("turnRight",(0.0, 360.0)) )/*,
     Vector("turnGunLeft", "turnGunRight", "fire", "fireBullet","setAhead", "setBack", "setMaxTurnRate", "setMaxVelocity"),
     Vector("turnGunLeft", "turnGunRight", "fire", "fireBullet","setAhead", "setBack", "setMaxTurnRate", "setMaxVelocity")*/
   //)
 
-  val listaScanNum: Vector[String]= Vector("e.getBearing", "e.getDistance", "e.getEnergy","e.getHeading", "e.getVelocity", "getGunHeading","getGunHeat", "getNumRounds", "getOthers","getRadarHeading", "getVelocity")/*,
+  val listaScanNum: Vector[(String,(Double, Double))]= Vector(
+    ("e.getBearing",(-180.0, 180.0)),
+    ("e.getDistance", (0.0, 800.0)),
+    ("e.getEnergy", (0.0, 100.0)),
+    ("e.getHeading", (0.0, 360.0)),
+    ("e.getVelocity", (0.0, 8.0)),
+    ("getGunHeading", (0.0, 360.0)),
+    ("getGunHeat", (0.0, 3)),
+    ("getNumRounds", (0.0, 800.0)),
+    ("getRadarHeading", (0.0, 360.0)),
+    ("getVelocity", (0.0, 8.0)))/*,
     Vector("e.getEnergy", "getGunHeading","getGunHeat", "getNumRounds", "getOthers","getRadarHeading", "getVelocity", "getRoundNum"),
     Vector("e.getBearing", "e.getPower", "e.getVelocity","e.getHeading", "getNumRounds", "getOthers","getRadarHeading", "getVelocity", "getRoundNum")*/
  // )
