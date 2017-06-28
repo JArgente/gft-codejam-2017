@@ -72,7 +72,10 @@ import scala.annotation.tailrec
     def getTerminal():NumExp
     def getSubtreeDepth(depth: Int, actualDepth: Int):NumExp
     def normalizaRange(otherRange:(Double, Double)):String=
-      "((("+this.parseToCode()+" - "+this.getRange()._1+")*("+otherRange._2+" - "+otherRange._1+"))/("+this.getRange()._2+" - "+this.getRange()._1+")) + "+otherRange._1
+      if(this.getRange()._2==this.getRange()._1)
+        "("+otherRange._1.toInt+"+Math.random())"
+      else
+        "((("+this.parseToCode()+" - "+this.getRange()._1+")*("+otherRange._2+" - "+otherRange._1+"))/("+this.getRange()._2+" - "+this.getRange()._1+")) + "+otherRange._1
   }
 
   case class Constant(n: Double) extends NumExp{
@@ -283,27 +286,27 @@ import scala.annotation.tailrec
   }
 
 object Functions {
-  def getRandomGenExp(maxDepth: Int):GenExp={
+  def getRandomGenExp(maxDepth: Int, listaAcciones: Vector[(String,(Double, Double))], listaScan: Vector[(String,(Double, Double))]):GenExp={
     maxDepth match {
       case MAX_DEPTH_CHROMOS =>
           val size: Int = listaAcciones.length
-          new Action(listaAcciones(Random.nextInt(size)), getRandomNumExp(maxDepth))
+          new Action(listaAcciones(Random.nextInt(size)), getRandomNumExp(maxDepth, listaScan))
       case n =>
         if (Math.random() > PROB_ACTION)
           if(Math.random() > 0.5)
-            new CondExpressElse(getRandomBoolExp(maxDepth + 1), getRandomGenExp(maxDepth + 1), getRandomGenExp(maxDepth + 1))
+            new CondExpressElse(getRandomBoolExp(maxDepth + 1, listaScan), getRandomGenExp(maxDepth + 1, listaAcciones, listaScan), getRandomGenExp(maxDepth + 1, listaAcciones, listaScan))
           else
-            new CondExpress(getRandomBoolExp(maxDepth + 1), getRandomGenExp(maxDepth + 1))
+            new CondExpress(getRandomBoolExp(maxDepth + 1, listaScan), getRandomGenExp(maxDepth + 1, listaAcciones, listaScan))
         else
-          getRandomGenExp(MAX_DEPTH_CHROMOS)
+          getRandomGenExp(MAX_DEPTH_CHROMOS, listaAcciones, listaScan)
     }
   }
 
-  def getRandomBoolExp(maxDepth: Int):Boolexp={
+  def getRandomBoolExp(maxDepth: Int, lista:Vector[(String,(Double, Double))]):Boolexp={
     maxDepth match {
       case MAX_DEPTH_CHROMOS =>
-        val exp1=getRandomNumExp(MAX_DEPTH_CHROMOS)
-        val exp2= getRandomNumExp(MAX_DEPTH_CHROMOS)
+        val exp1=getRandomNumExp(MAX_DEPTH_CHROMOS,lista)
+        val exp2= getRandomNumExp(MAX_DEPTH_CHROMOS,lista)
         Random.nextInt(6) match {
           case 0 => new Gt(exp1, exp2)
           case 1 => new Lt(exp1, exp2)
@@ -313,40 +316,40 @@ object Functions {
           case 5 => new Ne(exp1, exp2)
         }
       case n => if(Math.random()<PROB_TERMINAL)
-        getRandomBoolExp(MAX_DEPTH_CHROMOS)
+        getRandomBoolExp(MAX_DEPTH_CHROMOS,lista)
       else
         Random.nextInt(8) match {
-          case 0 => new And(getRandomBoolExp(MAX_DEPTH_CHROMOS), getRandomBoolExp(MAX_DEPTH_CHROMOS))
-          case 1 => new Or(getRandomBoolExp(MAX_DEPTH_CHROMOS), getRandomBoolExp(MAX_DEPTH_CHROMOS))
-          case 2 => new Gt(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
-          case 3 => new Lt(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
-          case 4 => new Gte(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
-          case 5 => new Lte(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
-          case 6 => new Eq(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
-          case 7 => new Ne(getRandomNumExp(MAX_DEPTH_CHROMOS), getRandomNumExp(MAX_DEPTH_CHROMOS))
+          case 0 => new And(getRandomBoolExp(MAX_DEPTH_CHROMOS,lista), getRandomBoolExp(MAX_DEPTH_CHROMOS,lista))
+          case 1 => new Or(getRandomBoolExp(MAX_DEPTH_CHROMOS,lista), getRandomBoolExp(MAX_DEPTH_CHROMOS,lista))
+          case 2 => new Gt(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
+          case 3 => new Lt(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
+          case 4 => new Gte(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
+          case 5 => new Lte(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
+          case 6 => new Eq(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
+          case 7 => new Ne(getRandomNumExp(MAX_DEPTH_CHROMOS,lista), getRandomNumExp(MAX_DEPTH_CHROMOS,lista))
 
         }
 
     }
   }
 
-  def getRandomNumExp(maxDepth: Int):NumExp={
+  def getRandomNumExp(maxDepth: Int, lista:Vector[(String,(Double, Double))]):NumExp={
     maxDepth match {
       case MAX_DEPTH_CHROMOS =>
-        if(Random.nextInt(2)>1)new Constant(Random.nextDouble())
+        if(Math.random()>0.5)new Constant(Random.nextDouble())
         else{
-          val rand=listaScanNum(Random.nextInt(listaScanNum.length))
+          val rand=lista(Random.nextInt(lista.length))
           new NumScan(rand._1, rand._2)
         }
       case n => if(Math.random()<PROB_TERMINAL)
-        getRandomNumExp(MAX_DEPTH_CHROMOS)
+        getRandomNumExp(MAX_DEPTH_CHROMOS,lista)
       else
         Random.nextInt(5) match {
-          case 0 => new Add(getRandomNumExp(maxDepth+1), getRandomNumExp(maxDepth+1))
-          case 1 => new Sub(getRandomNumExp(maxDepth+1), getRandomNumExp(maxDepth+1))
-          case 2 => new Mult(getRandomNumExp(maxDepth+1), getRandomNumExp(maxDepth+1))
-          case 3 => new Max(getRandomNumExp(maxDepth+1), getRandomNumExp(maxDepth+1))
-          case 4 => new Min(getRandomNumExp(maxDepth+1), getRandomNumExp(maxDepth+1))
+          case 0 => new Add(getRandomNumExp(maxDepth+1,lista), getRandomNumExp(maxDepth+1,lista))
+          case 1 => new Sub(getRandomNumExp(maxDepth+1,lista), getRandomNumExp(maxDepth+1,lista))
+          case 2 => new Mult(getRandomNumExp(maxDepth+1,lista), getRandomNumExp(maxDepth+1,lista))
+          case 3 => new Max(getRandomNumExp(maxDepth+1,lista), getRandomNumExp(maxDepth+1,lista))
+          case 4 => new Min(getRandomNumExp(maxDepth+1,lista), getRandomNumExp(maxDepth+1,lista))
         }
 
     }

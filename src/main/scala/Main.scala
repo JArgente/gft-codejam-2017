@@ -9,7 +9,7 @@ import scala.util.Random
   * Created by jeae on 14/06/2017.
   */
 object Main extends App{
-  val bestOfBests=MainEx.generationLoop(0, List.empty, POP_SIZE, new Robocode(), (null, -1.0))
+  val bestOfBests=MainEx.generationLoop(0, List.empty, POP_SIZE, new Robocode(), (null, (-1.0, -1.0, -1.0)))
   System.out.println("AMONG "+ POP_SIZE+" bots in each generation, after "+MAX_GENS+" generations the best bot is: "+bestOfBests.botName)
   bestOfBests.compile(bestOfBests.construct())
 }
@@ -17,7 +17,7 @@ object Main extends App{
 object MainEx {
 
   @tailrec
-  final def generationLoop(numGens: Int, genAnt: List[Bot], popSize: Int, roboCodeEngine: Robocode, bestAllTime: (Bot, Double)): Bot = {
+  final def generationLoop(numGens: Int, genAnt: List[Bot], popSize: Int, roboCodeEngine: Robocode, bestAllTime: (Bot, (Double, Double, Double))): Bot = {
     numGens match {
       case MAX_GENS => bestAllTime._1
       case n =>
@@ -25,11 +25,8 @@ object MainEx {
           genAnt match {
             case List() => {
               (1 to popSize).map(new Bot(0, _,
-                   // List(new Action("turnRadarRight", new Constant(360))),
-                   // (1 to NUM_CHROMOS).map(i => Functions.getRandomGenExp(0, 0)).toList,
-                    (1 to NUM_CHROMOS).map(i => Functions.getRandomGenExp(0)).toList/*,
-                    (1 to NUM_CHROMOS).map(i => Functions.getRandomGenExp(0, 2)).toList,
-                    (1 to NUM_CHROMOS).map(i => Functions.getRandomGenExp(0, 3)).toList*/)).toList
+                    (1 to Random.nextInt(NUM_CHROMOS)+1).map(i => Functions.getRandomGenExp(0, listaAccionesNormal, listaScanNumNormal)).toList,
+                    (1 to Random.nextInt(NUM_CHROMOS)+1).map(i => Functions.getRandomGenExp(0, listaAccionesScan, listaScanNumScaner)).toList)).toList
             }
             case xs => xs
           }
@@ -37,24 +34,48 @@ object MainEx {
         if(numGens>0)
           (0 to POP_SIZE).map(i=> PATH + "\\" + "X_GPbot_" + (numGens-1) + "_" + i).foreach(i=>deleteFile(i))
         val botFitnessList = roboCodeEngine.runBatchWithSamples(listaBots, ENEMIES_LIST, ROUNDS)
-        val bestInGen: (Bot, Double) = botFitnessList.maxBy(_._2)
-        val bestInGenCopy = new Bot(numGens+1, 0, bestInGen._1.chromosOnScan/*, bestInGen._1.chromosOnBullet, bestInGen._1.chromosOnHit*/)
-        val nextGen: List[Bot] = (1 to popSize - 1).map(i => generateBot(i, botFitnessList, Math.random(), numGens+1)).toList
-        val newBestAllTime = if (bestInGen._2 > bestAllTime._2) bestInGen else bestAllTime
+        val bestInGen: (Bot, (Double, Double, Double)) = botFitnessList.maxBy(_._2._3)
+        val bestInGenCopy = new Bot(numGens+1, 0,bestInGen._1.chromosNormal, bestInGen._1.chromosOnScan/*, bestInGen._1.chromosOnBullet, bestInGen._1.chromosOnHit*/)
+        val nextGenNormal: List[Bot] = (1 to popSize - 1).map(i => generateBotNormal(i, botFitnessList, Math.random(), numGens+1)).toList
+        val nextGenScan: List[Bot] = (1 to popSize - 1).map(i => generateBotScan(i, botFitnessList, Math.random(), numGens+1)).toList
+        val nextGen: List[Bot] = mergeGens(nextGenNormal.toArray, nextGenScan.toArray)
+        val newBestAllTime = if (bestInGen._2._3 > bestAllTime._2._3) bestInGen else bestAllTime
         generationLoop(numGens + 1, bestInGenCopy :: nextGen, popSize, roboCodeEngine, newBestAllTime)
     }
   }
 
-  def generateBot(indice: Int, listaBots: List[(Bot, Double)], prob: Double, actualGen: Int): Bot = {
-    val bestAdapted = listaBots.sortBy(_._2).reverse.take((listaBots.length * 0.9).toInt)
+  def mergeGens(nextGenNormal: Array[Bot], nextGenScan: Array[Bot]): List[Bot] ={
+    (1 to nextGenNormal.length).map(i=>new Bot(nextGenNormal(i).numGen, nextGenNormal(i).idBot, nextGenNormal(i).chromosNormal, nextGenScan(i).chromosOnScan)).toList
+  }
+
+  def generateBotNormal(indice: Int, listaBots: List[(Bot, (Double, Double, Double))], prob: Double, actualGen: Int): Bot = {
+    val bestAdapted = listaBots.sortBy(_._2._1).reverse.take((listaBots.length * 0.7).toInt)
     prob match {
       case p if p < PROB_CROSSOVER => {
         val selected = selectTournament(bestAdapted.toArray, 2)
-        crossOver(selected(0), selected(1), indice, actualGen + 1)
+        val chromos= crossOverGens(selected(0).chromosNormal, selected(1).chromosNormal)
+        new Bot(actualGen + 1, indice, chromos, selected(0).chromosOnScan)
       }
       case p => {
         val selected = selectTournament(bestAdapted.toArray, 1)
-        mutation(selected(0), indice, actualGen + 1)
+        val chromos=mutation(selected(0).chromosNormal, listaAccionesNormal, listaScanNumNormal)
+        new Bot(actualGen + 1, indice, chromos, selected(0).chromosOnScan)
+      }
+    }
+  }
+
+  def generateBotScan(indice: Int, listaBots: List[(Bot, (Double, Double, Double))], prob: Double, actualGen: Int): Bot = {
+    val bestAdapted = listaBots.sortBy(_._2._2).reverse.take((listaBots.length * 0.7).toInt)
+    prob match {
+      case p if p < PROB_CROSSOVER => {
+        val selected = selectTournament(bestAdapted.toArray, 2)
+        val chromos= crossOverGens(selected(0).chromosOnScan, selected(1).chromosOnScan)
+        new Bot(actualGen + 1, indice, selected(0).chromosNormal, chromos)
+      }
+      case p => {
+        val selected = selectTournament(bestAdapted.toArray, 1)
+        val chromos=mutation(selected(0).chromosOnScan, listaAccionesScan, listaScanNumScaner)
+        new Bot(actualGen + 1, indice, selected(0).chromosNormal, chromos)
       }
     }
   }
@@ -66,145 +87,38 @@ object MainEx {
     oldClass.delete();
   }
 
-  def selectTournament(lista: Array[(Bot, Double)], number: Int): Array[Bot] = {
+  def selectTournament(lista: Array[(Bot, (Double,Double,Double))], number: Int): Array[Bot] = {
     Stream.from(1).map(i => Random.nextInt(lista.length)).distinct.take(number).map(lista(_)._1).toArray
   }
 
-  def crossOver(parent1: Bot, parent2: Bot, pos: Int, gen: Int): Bot = {
-   /* val mapChromosNormal1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosNormal(i))).toMap
-    val mapChromosNormal2 = (1 to NUM_CHROMOS).map(i => (i, parent2.chromosNormal(i))).toMap*/
-    val mapChromosOnScan1 = (0 to NUM_CHROMOS-1).map(i => (i, parent1.chromosOnScan(i))).toMap
-    val mapChromosOnScan2 = (0 to NUM_CHROMOS-1).map(i => (i, parent2.chromosOnScan(i))).toMap
-    /*val mapChromosOnBullet1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosOnBullet(i))).toMap
-    val mapChromosOnBullet2 = (1 to NUM_CHROMOS).map(i => (i, parent2.chromosOnBullet(i))).toMap
-    val mapChromosOnHit1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosOnHit(i))).toMap
-    val mapChromosOnHit2 = (1 to NUM_CHROMOS).map(i => (i, parent2.chromosOnHit(i))).toMap*/
+  def crossOverGens(parent1: List[GenExp], parent2: List[GenExp]): List[GenExp] = {
+    val mapChromos1 = (0 to parent1.length-1).map(i => (i, parent1(i))).toMap
+    val mapChromos2 = (0 to parent2.length-1).map(i => (i, parent2(i))).toMap
 
-  /*  val probOfMutation = List(1, 0.3)
-    val probability: Double = probOfMutation(Random.nextInt(probOfMutation.length))
-
-    if (Math.random() < probability) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.take(2)
+      val indexChromosSelected1 = Stream.from(1).map(i => Random.nextInt(parent1.length)).distinct.take(2)
+      val indexChromosSelected2 = Stream.from(1).map(i => Random.nextInt(parent2.length)).distinct.take(2)
       if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
         if (Math.random < PROB_JUMP_GENOMES)
-          mapChromosNormal1.updated(indexChromosSelected(0), mapChromosNormal2.get(indexChromosSelected(1)))
+          mapChromos1.updated(indexChromosSelected1(0), mapChromos2.get(indexChromosSelected2(1)))
         else
-          mapChromosNormal1.updated(indexChromosSelected(0), mapChromosNormal2.get(indexChromosSelected(0)))
+          mapChromos1.updated(indexChromosSelected1(0), mapChromos2.get(indexChromosSelected2(0)))
       else {
-        mapChromosNormal1.updated(indexChromosSelected(0), mapChromosNormal2.get(indexChromosSelected(0)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-        mapChromosNormal1.updated(indexChromosSelected(1), mapChromosNormal2.get(indexChromosSelected(1)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
+        mapChromos1.updated(indexChromosSelected1(0), mapChromos2.get(indexChromosSelected2(0)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
+        mapChromos1.updated(indexChromosSelected1(1), mapChromos2.get(indexChromosSelected2(1)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
       }
- }
-    val childChromosNormal = mapChromosNormal1
 
-    val probOfMutation2 = probOfMutation.filter(n => n != probability)
-    val probability2 = probOfMutation2(Random.nextInt(probOfMutation2.length))
-
-    if (Math.random() < probability2) {*/
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.take(2)
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        if (Math.random < PROB_JUMP_GENOMES)
-          mapChromosOnScan1.updated(indexChromosSelected(0), mapChromosOnScan2.get(indexChromosSelected(1)))
-        else
-          mapChromosOnScan1.updated(indexChromosSelected(0), mapChromosOnScan2.get(indexChromosSelected(0)))
-      else {
-        mapChromosOnScan1.updated(indexChromosSelected(0), mapChromosOnScan2.get(indexChromosSelected(0)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-        mapChromosOnScan1.updated(indexChromosSelected(1), mapChromosOnScan2.get(indexChromosSelected(1)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-      }
-   // }
-    val childChromosScan = mapChromosOnScan1
-
-  /*  val probOfMutation2 = probOfMutation.filter(n => n != probability)
-    val probability2 = probOfMutation2(Random.nextInt(probOfMutation2.length))
-
-    if (Math.random() < probability2) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.take(2)
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        if (Math.random < PROB_JUMP_GENOMES)
-          mapChromosOnBullet1.updated(indexChromosSelected(0), mapChromosOnBullet2.get(indexChromosSelected(1)))
-        else
-          mapChromosOnBullet1.updated(indexChromosSelected(0), mapChromosOnBullet2.get(indexChromosSelected(0)))
-      else {
-        mapChromosOnBullet1.updated(indexChromosSelected(0), mapChromosOnBullet2.get(indexChromosSelected(0)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-        mapChromosOnBullet1.updated(indexChromosSelected(1), mapChromosOnBullet2.get(indexChromosSelected(1)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-      }
-    }
-    val childChromosBullet = mapChromosOnBullet1
-
-    val probOfMutation4 = probOfMutation3.filter(n => n != probability3)
-    val probability4 = probOfMutation4(Random.nextInt(probOfMutation4.length))
-
-    if (Math.random() < probability4) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.take(2)
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        if (Math.random < PROB_JUMP_GENOMES)
-          mapChromosOnHit1.updated(indexChromosSelected(0), mapChromosOnHit2.get(indexChromosSelected(1)))
-        else
-          mapChromosOnHit1.updated(indexChromosSelected(0), mapChromosOnHit2.get(indexChromosSelected(0)))
-      else {
-        mapChromosOnHit1.updated(indexChromosSelected(0), mapChromosOnHit2.get(indexChromosSelected(0)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-        mapChromosOnHit1.updated(indexChromosSelected(1), mapChromosOnHit2.get(indexChromosSelected(1)).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-      }
-    }
-    val childChromosHit = mapChromosOnHit1*/
-
-    new Bot(gen, pos, /*childChromosNormal.values.toList,*/ childChromosScan.values.toList/*, childChromosBullet.values.toList, childChromosHit.values.toList*/)
+    mapChromos1.values.toList
   }
 
-  def mutation(parent1: Bot, pos: Int, gen: Int): Bot = {
-//    val mapChromosNormal1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosNormal(i))).toMap
-   // val mapChromosOnBullet1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosOnBullet(i))).toMap
-    val mapChromosOnScan1 = (0 to NUM_CHROMOS-1).map(i => (i, parent1.chromosOnScan(i))).toMap
-    //val mapChromosOnHit1 = (1 to NUM_CHROMOS).map(i => (i, parent1.chromosOnHit(i))).toMap
+  def mutation(parent1: List[GenExp], listaAcciones: Vector[(String, (Double, Double))], listaScan: Vector[(String, (Double, Double))]): List[GenExp] = {
+    val mapChromos1 = (0 to parent1.length-1).map(i => (i, parent1(i))).toMap
 
-    //val probOfMutation = List(1, 0.3)
-    //val probability: Double = probOfMutation(Random.nextInt(probOfMutation.length))
-
-  /*  if (Math.random() < probability) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.head
+      val indexChromosSelected = Random.nextInt(parent1.length)
       if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        mapChromosNormal1.updated(indexChromosSelected, Functions.getRandomGenExp(Random.nextInt(MAX_DEPTH_CHROMOS), 0))
+        mapChromos1.updated(indexChromosSelected, Functions.getRandomGenExp(Random.nextInt(MAX_DEPTH_CHROMOS), listaAcciones, listaScan))
       else
-        mapChromosNormal1.updated(indexChromosSelected, mapChromosNormal1.get(indexChromosSelected).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-  }
-    val childChromosNormal = mapChromosNormal1*/
+        mapChromos1.updated(indexChromosSelected, mapChromos1.get(indexChromosSelected).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
 
- /*   val probOfMutation2 = probOfMutation.filter(n => n != probability)
-    val probability2 = probOfMutation2(Random.nextInt(probOfMutation2.length))
-
-    if (Math.random() < probability2) {*/
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.head
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        mapChromosOnScan1.updated(indexChromosSelected, Functions.getRandomGenExp(Random.nextInt(MAX_DEPTH_CHROMOS)))
-      else
-        mapChromosOnScan1.updated(indexChromosSelected, mapChromosOnScan1.get(indexChromosSelected).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-  //  }
-    val childChromosScan = mapChromosOnScan1
-
-    /*val probOfMutation2 = probOfMutation.filter(n => n != probability)
-    val probability2 = probOfMutation2(Random.nextInt(probOfMutation2.length))
-
-    if (Math.random() < probability2) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.head
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        mapChromosOnBullet1.updated(indexChromosSelected, Functions.getRandomGenExp(Random.nextInt(MAX_DEPTH_CHROMOS), 1))
-      else
-        mapChromosOnBullet1.updated(indexChromosSelected, mapChromosOnBullet1.get(indexChromosSelected).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-    }
-    val childChromosBullet = mapChromosOnBullet1
-
-    val probOfMutation4 = probOfMutation3.filter(n => n != probability3)
-    val probability4 = probOfMutation4(Random.nextInt(probOfMutation4.length))
-
-    if (Math.random() < probability4) {
-      val indexChromosSelected = Stream.from(1).map(i => Random.nextInt(NUM_CHROMOS)).distinct.head
-      if (Math.random < PROB_SWAP_ENTIRE_CHROMO)
-        mapChromosOnHit1.updated(indexChromosSelected, Functions.getRandomGenExp(Random.nextInt(MAX_DEPTH_CHROMOS), 1))
-      else
-        mapChromosOnHit1.updated(indexChromosSelected, mapChromosOnHit1.get(indexChromosSelected).get.getSubtree(Random.nextDouble() < PROB_CROSS_TERMINAL))
-    }
-    val childChromosHit = mapChromosOnHit1*/
-
-    new Bot(gen, pos, /*childChromosNormal.values.toList,*/ childChromosScan.values.toList/*, childChromosBullet.values.toList, childChromosHit.values.toList*/)
+    mapChromos1.values.toList
   }
 }
